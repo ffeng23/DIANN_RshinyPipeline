@@ -1,0 +1,13 @@
+#commands to call
+#be careful about the double quotes and single quotes.
+R -e "library(ggplot2); a=15; filepath='c://Feng//MS'; shiny::runApp('c:\\Feng\\MS\\shinyApps/', launch.browser = TRUE)"
+setwd("c://Feng//MS")
+runApp("shinyApps")
+
+###https://stat545.com/shiny-tutorial.html
+
+https://mastering-shiny.org/action-layout.html
+
+https://mastering-shiny.org/basic-reactivity.html
+
+https://shiny.rstudio.com/tutorial/written-tutorial/lesson4/
