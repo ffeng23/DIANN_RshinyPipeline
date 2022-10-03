@@ -5,6 +5,44 @@ library(tidyverse)
 #library(mosaic)
 #library(rstatix)
 library(ggplot2)
+library(diann)
+library(fs)
+library(shinyFiles)
+
+#read the diann file with the diann r package
+rep_df=data.frame()
+readDiannReport<-function(file_path)
+{
+    rep_df <- diann_load(file_path)
+    #cat(class(rep_df),"\n")
+    #cat("dimension:", dim(rep_df),"\n")
+    return (rep_df)
+}
+
+readDiannReport<-function(file_path)
+{
+    rep_df <- diann_load(file_path)
+    #cat(class(rep_df),"\n")
+    #cat("dimension:", dim(rep_df),"\n")
+    return (rep_df)
+}
+#'@param ds dirchoose, input$directory_select
+checkFileExist<-function(ds, vols, filename="report.tsv")
+{
+if(!is.integer(ds))
+        {
+            
+            if(file.exists(file.path(parseDirPath(vols, ds),filename)))
+            {
+                return (TRUE)
+            }
+            else return(FALSE)
+        }
+else return(FALSE)
+}
+#################-for testing.
+
+
 mtcars.data<-mtcars; #show how to use to read data etc. mtcars.data used by server.R
 a=15
 freqpoly <- function(x1, x2, binwidth = 0.1, xlim = c(-3, 3)) {
