@@ -27,3 +27,5 @@ diann r
 
 shinyFiles  r-shinyfiles
 fs  
+
+shinyFileExamples()
