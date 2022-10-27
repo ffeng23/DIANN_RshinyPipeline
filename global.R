@@ -10,6 +10,7 @@ library(fs)
 library(shinyFiles)
 library(listenv)
 library(DT)
+library(ggpubr)
 #read the diann file with the diann r package
 rep_df=data.frame()
 readDiannReport<-function(file_path)

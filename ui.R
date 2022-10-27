@@ -79,9 +79,9 @@ ui <- fluidPage(
                 sidebarLayout(
                         sidebarPanel(
                                     selectInput("QCPlotType", "Select QC category:",
-                                                c( "Total quanity" = "total_quant",
-                                                    "MS signal" = "ms_sig",
-                                                  "MS quantity signal ratio" = "ms_sig_ratio"
+                                                c( "Total Quanity" = "total_quant",
+                                                    "MS Signal" = "ms_sig",
+                                                  "MS signal ratio (MS1/MS2)" = "ms_sig_ratio"
                                                  )),
                                     #tableOutput("data")
                                     
