@@ -135,24 +135,38 @@ server <- function(input, output, session) {
                 #read file
             df_stat<-read.csv(file.path(parseDirPath(env$volumes, input$directory_select),"report.stats.tsv"),
                     sep='\t')
+			df_stat$Run<-as.factor(c(1:dim(df_stat)[1]))
             #get the value the plot type from QCPlotType
                 
             switch(input$QCPlotType,
                 "total_quant"={
-                    barplot(df_stat$Total.Quantity, xlab="Run", ylab="Total Quantit", main="QC: Total Quantity")
+                    #barplot(df_stat$Total.Quantity, xlab="Run", ylab="Total Quantity", main="QC: Total Quantity")
+					ggplot(data=df_stat, aes(x=Run, y=Total.Quantity,fill=Run))+
+							geom_bar(stat="Identity")
+
                 },
                 "ms_sig"={
-                    op<-par(mfrow=c(1,2))
-                    barplot(df_stat$MS1.Signal, xlab="Run", ylab="Signal", main="QC: MS1 Signal" )
-                    barplot(df_stat$MS2.Signal,xlab="Run", ylab="Signal", main="QC: MS2 Signal")
-                    par(op)
+                    #op<-par(mfrow=c(1,2))
+					
+					s1<-ggplot(data=df_stat, aes(x=Run, y=MS1.Signal,fill=Run))+
+							geom_bar(stat="Identity")
+					s2<-ggplot(data=df_stat, aes(x=Run, y=MS2.Signal,fill=Run))+
+							geom_bar(stat="Identity")
+                    #barplot(df_stat$MS1.Signal, xlab="Run", ylab="Signal", main="QC: MS1 Signal" )
+                    #barplot(df_stat$MS2.Signal,xlab="Run", ylab="Signal", main="QC: MS2 Signal")
+                    #par(op)
+					ggarrange(s1,s2,
+						labels = c("A", "B"),
+						ncol = 2, nrow = 1)
                 },
                 "ms_sig_ratio"={
-                    plot(c(1,2),c(3,4),col=3)
+					df_stat$MS.Sig.Ratio<-df_stat$MS1.Signal/df_stat$MS2.Signal
+                    ggplot(data=df_stat, aes(x=Run, y=MS.Sig.Ratio,fill=Run))+
+							geom_bar(stat="Identity")
                 }
             )#end of switch
             
-        });
+        },width=750, height=500);
         
     #-----------------------------------------
     #               PTM tab                       +
@@ -167,11 +181,11 @@ server <- function(input, output, session) {
             #check ptm selected 
             if(length(input$ptms_selected)<1)
                 return()
-            cat("length of selection,", length(input$ptms_selected),"\n")
+            #cat("length of selection,", length(input$ptms_selected),"\n")
             mseq<-env$active_rep_data$Modified.Sequence
             index=c()
             for(i in 1:length(input$ptms_selected)){
-                temp<-grep(x=mseq, pattern=input$ptms_selected, fixed=T)
+                temp<-grep(x=mseq, pattern=input$ptms_selected[i], fixed=T)
                 index<-union(index,temp)
             }
                 datatable(env$active_rep_data[index,c("Protein.Ids", "Run", "Modified.Sequence","Protein.Names")])
@@ -187,15 +201,15 @@ server <- function(input, output, session) {
                     return()
             
                 #read file
-                #cat("I am here 1")
+                cat("PTM analysis summary: \n")
                 mseq<-env$active_rep_data$Modified.Sequence
                 mseq.index<-grep(pattern="\\(.+\\)", x=mseq)
                 #cat("after paste0")
-                cat(paste0("Found total ", length(mseq.index)," peptides with PTM\n"))
+                cat(paste0("\t", length(mseq.index)," peptides found with PTM(s)\n"))
                 #now get unique PTMs
                 mseq.ptms.index<-gregexpr(text=mseq, pattern="\\([^()]+\\)")
                 num.ptms<-sum(as.numeric(lapply(mseq.ptms.index,FUN=function(x) {sum(x>0)})))
-                cat("\ttotal ", num.ptms , " PTMs\n")
+                cat("\t", num.ptms , " PTMs in total\n")
                 ptms<-lapply(mseq, FUN=extract_PTMs_each)
                 ptms.unlist<-unlist(ptms)
                 ptms.unlist<-ptms.unlist[ptms.unlist!=""]
@@ -229,7 +243,7 @@ server <- function(input, output, session) {
                 ptms.unlist<-unlist(ptms)
                 ptms.unlist<-ptms.unlist[ptms.unlist!=""]
                 ptms.unlist<-unique(ptms.unlist)
-                checkboxGroupInput("ptms_selected", "Choose PTM to shwo sequences", ptms.unlist)
+                checkboxGroupInput("ptms_selected", "Choose to show modified sequences", ptms.unlist)
         })
     ###########++++++++++++++++++++++++
     #=              For testing
