@@ -70,8 +70,11 @@ ui <- fluidPage(
                                 #tableOutput("rep_sum")
                            )
             ),
-       ), 
-        #do QC plots     
+       ),    #end of summary
+       
+       ####=============
+       ##    do QC plots        +
+       ##################
         tabPanel("QC", 
                 sidebarLayout(
                         sidebarPanel(
@@ -87,13 +90,32 @@ ui <- fluidPage(
                                         p("QC Plot:", style="text-align:center"),# width=2
                                         plotOutput("QC_plot_1")
                         )
-                 )
-                 
-        ), 
+                 )          
+        ),   #end of QC
+        
+        ################+++++++++++++++++
+        #                        Tab of PTM                                  +
+        #################################
+        tabPanel("PTM", 
+                #tableOutput("table")
+                #h1("Will show summary of PTMs!!"),
+                verbatimTextOutput("PTM_sum"),
+                #tableOutput("PTM_unique_table"),
+                uiOutput("PTM_select"),
+                DT::dataTableOutput("PTM_seq_table")
+                
+        ), ##<---   end of PTM
+        
+        
+        ################+++++++++++++++++
+        #                        Tab of Statistical analysis   +
+        #################################
         tabPanel("Statistical Analysis", 
                 #tableOutput("table")
-                h1("Will show some analysis here!!")
-        )
+                h1("Will show some analysis here!!"),
+                
+        ) ##<--- end of statistical analysis.
+        
       )
    
   #end sidebarLayout

@@ -2,24 +2,38 @@
 # paired with ui.R and global.R 
 #
 #
-# Define server logic required to draw a histogram ----
+# Define server logic required to do functions----
 options(shiny.maxRequestSize=30*1024^2)
+
 server <- function(input, output, session) {
-    output$hist <- renderPlot({
-            x1 <- rnorm(input$n1, input$mean1, input$sd1)
-            x2 <- rnorm(input$n2, input$mean2, input$sd2)
-            
-            freqpoly(x1, x2, binwidth = input$binwidth, xlim = input$range)
-        }, res = 96
+    #############################----
+    #global variable to be used
+    #=============================
+        env<-listenv();
+        env$active_rep_data<-NULL;  #this is the currently activate report data 
+        env$all_rep_data<-NULL; #this is the one that is read from disk without processing
+        env$volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
+        shinyDirChoose(input, "directory_select", roots = env$volumes, session = session, restrictions = system.file(package = "base"), allowDirCreate = FALSE)
+        env$filename<-""
+    #end of global data declaration
+    
+    #watch for the changes of selection folder input to 
+    observe({
+        input$directory_select
+        if(checkFileExist( input$directory_select,env$volumes,"report.tsv")){
+                        #read the file now. using
+                env$filename<-file.path(parseDirPath(env$volumes, input$directory_select),"report.tsv")
+                
+                #cat("filename is ", filename, ";  after reading fn is ", fn)
+                env$all_rep_data<-readDiannReport(env$filename)
+                env$active_rep_data<-env$all_rep_data
+            }
+        }
     )
-	
-	#second component
-    output$ttest <- renderText({
-        x1 <- rnorm(input$n1, input$mean1, input$sd1)
-        x2 <- rnorm(input$n2, input$mean2, input$sd2)
-        
-        t_test(x1, x2)
-    })
+    
+    ########################################
+    #               read files.
+    #--------------------------------------------------------------
     #second component, for input single file ---- not using now.
     output$rep_fname <- renderText({
         repfile <- input$drep_file
@@ -31,24 +45,17 @@ server <- function(input, output, session) {
         paste0("The report file has been uploaded successfully. \n",repfile$name) 
     })
     
-  volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
-  shinyDirChoose(input, "directory_select", roots = volumes, session = session, restrictions = system.file(package = "base"), allowDirCreate = FALSE)
-
+      
   
     output$directory_name <- renderPrint({
-         # x<-NULL 
-        #if (!is.integer(input$directory_select)) {       
-         #   parseDirPath(volumes, input$directory_select)
-        #}
-        #cat("the file direct is ",x,"\n")
-        #cat(file.path(x,"report.tsv"))
+         
         if(!is.integer(input$directory_select))
         {
-            cat("Upload folder specified as ",parseDirPath(volumes, input$directory_select), "\n")
-            if(file.exists(file.path(parseDirPath(volumes, input$directory_select),"report.tsv")))
+            cat("Upload folder specified as ",parseDirPath(env$volumes, input$directory_select), "\n")
+            if(file.exists(file.path(parseDirPath(env$volumes, input$directory_select),"report.tsv")))
             {   
                 cat("\tReport file located\n")
-                if(file.exists(file.path(parseDirPath(volumes, input$directory_select),"report.stats.tsv")))
+                if(file.exists(file.path(parseDirPath(env$volumes, input$directory_select),"report.stats.tsv")))
                     cat("\tReport stats file located\n")
                 else 
                     cat("\tReprot stats file DOES NOT exist\n!! Please double check......")
@@ -58,86 +65,175 @@ server <- function(input, output, session) {
             else cat("\tReport file DOES NOT exist. Please double check\n")
         }
     })
-    #render for summary section using file. not using now.
-    output$rep_sum <- renderTable({
-        repfile <- input$drep_file
-        ext <- tools::file_ext(repfile$datapath)
-
-        req(repfile)
-        validate(need(ext == "tsv"|ext=="csv", "Please upload a tsv|csv file"))
-        
-        #read the file now. using 
-        rep_df<-readDiannReport(repfile$datapath)
-        rs<-c("Report File Name:", "File Size","Runs")
-        cs<-c(repfile$name,repfile$size, length(unique(rep_df$Run)) )
-        
-        rs<-c(rs, "Protein Groups")
-        cs<-c(cs, length(unique(rep_df$Protein.Group)))
-        
-        rs<-c(rs, "Proteins")
-        cs<-c(cs, length(unique(rep_df$Protein.Ids)))
-        
-        rs<-c(rs, "Genes")
-        cs<-c(cs, length(unique(rep_df$Genes)))
-        
-        data.frame(param=rs, value=cs)     
-        
-        }, 
-        striped=T
-        #bordered=T
-    )
-    output$rep_sum2 <- renderTable({
-        if(!checkFileExist( input$directory_select,volumes,"report.tsv"))
-                return()
-        
-        #read the file now. using 
-        filename<-file.path(parseDirPath(volumes, input$directory_select),"report.tsv")
-        rep_df<-readDiannReport(filename)
-        rs<-c("Report File Name:", "File Size","Runs")
-        cs<-c(basename(filename), fs::file_size(filename), length(unique(rep_df$Run)) )
-        
-        rs<-c(rs, "Protein Groups")
-        cs<-c(cs, length(unique(rep_df$Protein.Group)))
-        
-        rs<-c(rs, "Proteins")
-        cs<-c(cs, length(unique(rep_df$Protein.Ids)))
-        
-        rs<-c(rs, "Genes")
-        cs<-c(cs, length(unique(rep_df$Genes)))
-        
-        data.frame(param=rs, value=cs)     
-        
-        }, 
-        striped=T
-        #bordered=T
-    )
-    output$QC_plot_1 <- renderPlot({
-        #read data first
-            if(!checkFileExist( input$directory_select,volumes,"report.stats.tsv"))
-                return()
-            #read file
-            df_stat<-read.csv(file.path(parseDirPath(volumes, input$directory_select),"report.stats.tsv"),
-                sep='\t'
-            )
-        #get the value the plot type from QCPlotType
-            
-        switch(input$QCPlotType,
-            "total_quant"={
-                barplot(df_stat$Total.Quantity, xlab="Run", ylab="Total Quantit", main="QC: Total Quantity")
-            },
-            "ms_sig"={
-                op<-par(mfrow=c(1,2))
-                barplot(df_stat$MS1.Signal, xlab="Run", ylab="Signal", main="QC: MS1 Signal" )
-                barplot(df_stat$MS2.Signal,xlab="Run", ylab="Signal", main="QC: MS2 Signal")
-                par(op)
-            },
-            "ms_sig_ratio"={
-                plot(c(1,2),c(3,4),col=3)
-            }
-        )#end of switch
-        
-    });
     
+    #########################################
+    #                   Run Summary section 
+    #########################################
+        #render for summary section using file. <----not using now.-->
+        output$rep_sum <- renderTable({
+            repfile <- input$drep_file
+            ext <- tools::file_ext(repfile$datapath)
+
+            req(repfile)
+            validate(need(ext == "tsv"|ext=="csv", "Please upload a tsv|csv file"))
+            
+            #read the file now. using 
+            rep_df<-readDiannReport(repfile$datapath)
+            rs<-c("Report File Name:", "File Size","Runs")
+            cs<-c(repfile$name,repfile$size, length(unique(rep_df$Run)) )
+            
+            rs<-c(rs, "Protein Groups")
+            cs<-c(cs, length(unique(rep_df$Protein.Group)))
+            
+            rs<-c(rs, "Proteins")
+            cs<-c(cs, length(unique(rep_df$Protein.Ids)))
+            
+            rs<-c(rs, "Genes")
+            cs<-c(cs, length(unique(rep_df$Genes)))
+            
+            data.frame(param=rs, value=cs)     
+            
+            }, 
+            striped=T
+            #bordered=T
+        )
+        output$rep_sum2 <- renderTable({
+                #cat("doing before checking.")
+                input$directory_select  #<- this is here so that the renderTable is observing its changes.
+                #env$active_rep_data
+                if(is.null(env$active_rep_data))
+                        return()
+                #cat("doing good so far\n")
+                rep_df<-env$active_rep_data;
+                rs<-c("Report File Name:", "File Size","Runs")
+                cs<-c(basename(env$filename), fs::file_size(env$filename), length(unique(rep_df$Run)) )
+                
+                rs<-c(rs, "Protein Groups")
+                cs<-c(cs, length(unique(rep_df$Protein.Group)))
+                
+                rs<-c(rs, "Proteins")
+                cs<-c(cs, length(unique(rep_df$Protein.Ids)))
+                
+                rs<-c(rs, "Genes")
+                cs<-c(cs, length(unique(rep_df$Genes)))
+                
+                data.frame(param=rs, value=cs)     
+                
+            }, 
+            striped=T
+            #bordered=T
+        );
+        
+    #-----------------------------------------
+    #               QC tab                       +
+    ##########################\
+        #reading stats file and all necessary data related to state should come in here.
+        output$QC_plot_1 <- renderPlot({
+            #read data first
+                if(!checkFileExist( input$directory_select,env$volumes,"report.stats.tsv"))
+                    return()
+                #read file
+            df_stat<-read.csv(file.path(parseDirPath(env$volumes, input$directory_select),"report.stats.tsv"),
+                    sep='\t')
+            #get the value the plot type from QCPlotType
+                
+            switch(input$QCPlotType,
+                "total_quant"={
+                    barplot(df_stat$Total.Quantity, xlab="Run", ylab="Total Quantit", main="QC: Total Quantity")
+                },
+                "ms_sig"={
+                    op<-par(mfrow=c(1,2))
+                    barplot(df_stat$MS1.Signal, xlab="Run", ylab="Signal", main="QC: MS1 Signal" )
+                    barplot(df_stat$MS2.Signal,xlab="Run", ylab="Signal", main="QC: MS2 Signal")
+                    par(op)
+                },
+                "ms_sig_ratio"={
+                    plot(c(1,2),c(3,4),col=3)
+                }
+            )#end of switch
+            
+        });
+        
+    #-----------------------------------------
+    #               PTM tab                       +
+    ##########################\
+        output$PTM_seq_table <- DT::renderDataTable({
+            
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            input$ptms_selected
+            #check data availability
+            if(is.null(env$active_rep_data))
+                    return()
+            #check ptm selected 
+            if(length(input$ptms_selected)<1)
+                return()
+            cat("length of selection,", length(input$ptms_selected),"\n")
+            mseq<-env$active_rep_data$Modified.Sequence
+            index=c()
+            for(i in 1:length(input$ptms_selected)){
+                temp<-grep(x=mseq, pattern=input$ptms_selected, fixed=T)
+                index<-union(index,temp)
+            }
+                datatable(env$active_rep_data[index,c("Protein.Ids", "Run", "Modified.Sequence","Protein.Names")])
+            
+        });
+        
+        ### to print out a summary of PTMs in the sequencies
+        output$PTM_sum <- renderPrint({
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            
+            #read data first
+            if(is.null(env$active_rep_data))
+                    return()
+            
+                #read file
+                #cat("I am here 1")
+                mseq<-env$active_rep_data$Modified.Sequence
+                mseq.index<-grep(pattern="\\(.+\\)", x=mseq)
+                #cat("after paste0")
+                cat(paste0("Found total ", length(mseq.index)," peptides with PTM\n"))
+                #now get unique PTMs
+                mseq.ptms.index<-gregexpr(text=mseq, pattern="\\([^()]+\\)")
+                num.ptms<-sum(as.numeric(lapply(mseq.ptms.index,FUN=function(x) {sum(x>0)})))
+                cat("\ttotal ", num.ptms , " PTMs\n")
+                ptms<-lapply(mseq, FUN=extract_PTMs_each)
+                ptms.unlist<-unlist(ptms)
+                ptms.unlist<-ptms.unlist[ptms.unlist!=""]
+                ptms.unlist<-unique(ptms.unlist)
+                cat("\t", length(ptms.unlist), " unique PTMs\n")
+                #print(lapply(mseq.ptms.index,FUN=function(x) {sum(x>0)}))
+        });
+        
+        output$PTM_unique_table <- renderTable({
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            #read data first
+                if(is.null(env$active_rep_data))
+                    return()
+                mseq<-env$active_rep_data$Modified.Sequence
+                
+                ptms<-lapply(mseq, FUN=extract_PTMs_each)
+                ptms.unlist<-unlist(ptms)
+                ptms.unlist<-ptms.unlist[ptms.unlist!=""]
+                ptms.unlist<-unique(ptms.unlist)
+                data.frame(ptms=ptms.unlist)
+        });
+        
+        output$PTM_select <- renderUI({
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            #read data first
+                if(is.null(env$active_rep_data))
+                    return()
+                mseq<-env$active_rep_data$Modified.Sequence
+                
+                ptms<-lapply(mseq, FUN=extract_PTMs_each)
+                ptms.unlist<-unlist(ptms)
+                ptms.unlist<-ptms.unlist[ptms.unlist!=""]
+                ptms.unlist<-unique(ptms.unlist)
+                checkboxGroupInput("ptms_selected", "Choose PTM to shwo sequences", ptms.unlist)
+        })
+    ###########++++++++++++++++++++++++
+    #=              For testing
+    #=================================
     output$distPlot <- renderPlot({
         x    <- faithful$waiting
         bins <- seq(min(x), max(x), length.out = input$bins + 1)
@@ -145,17 +241,40 @@ server <- function(input, output, session) {
         hist(x, breaks = bins, col = "#75AADB", border = "white",
             xlab = "Waiting time to next eruption (in mins)",
             main = "Histogram of waiting times")
-    });
-	
-	output$ggPlot <- renderPlot({
+        });
+        
+        output$ggPlot <- renderPlot({
 
-        dft<-data.frame(x=1:5, y=10:14)
-        ggplot(mtcars, aes(wt, mpg)) + geom_point(colour = "red", size = 3)
-    });
+            dft<-data.frame(x=1:5, y=10:14)
+            ggplot(mtcars, aes(wt, mpg)) + geom_point(colour = "red", size = 3)
+        });
+        output$hist <- renderPlot({
+                x1 <- rnorm(input$n1, input$mean1, input$sd1)
+                x2 <- rnorm(input$n2, input$mean2, input$sd2)
+                
+                freqpoly(x1, x2, binwidth = input$binwidth, xlim = input$range)
+            }, res = 96
+        )
+        
+        #second component
+        output$ttest <- renderText({
+            x1 <- rnorm(input$n1, input$mean1, input$sd1)
+            x2 <- rnorm(input$n2, input$mean2, input$sd2)
+            
+            t_test(x1, x2)
+        })
     
 	output$text1 <- renderText({paste("You have selected", a)})
-	
 	#output$text2 <- renderText({paste("the file path is: ", filepath)})
+    
+    #-------------------------------------------------
+    #-            end of testing section             +
+    #============================-|
+    
+    #### +++++++++++++++++++++++++
+    ##     the last command to close page
+    ###############################
+	
   session$onSessionEnded(stopApp)
-}
+}#end bracket
 
