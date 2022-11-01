@@ -12,7 +12,10 @@ server <- function(input, output, session) {
         env<-listenv();
         env$active_rep_data<-NULL;  #this is the currently activate report data 
         env$all_rep_data<-NULL; #this is the one that is read from disk without processing
+        env$list_all_data<-list(); #this is the list keep track all the data
+        env$dataset_conditions<-list(); #this is the list keep track of data set conditions.
         env$volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
+        
         shinyDirChoose(input, "directory_select", roots = env$volumes, session = session, restrictions = system.file(package = "base"), allowDirCreate = FALSE)
         env$filename<-""
     #end of global data declaration
@@ -26,13 +29,14 @@ server <- function(input, output, session) {
                 
                 #cat("filename is ", filename, ";  after reading fn is ", fn)
                 env$all_rep_data<-readDiannReport(env$filename)
+                env$list_all_data<-list(env$all_rep_data)
                 env$active_rep_data<-env$all_rep_data
             }
         }
     )
     
     ########################################
-    #               read files.
+    #               read files.    NOT USING-------
     #--------------------------------------------------------------
     #second component, for input single file ---- not using now.
     output$rep_fname <- renderText({
@@ -51,12 +55,12 @@ server <- function(input, output, session) {
          
         if(!is.integer(input$directory_select))
         {
-            cat("Upload folder specified as ",parseDirPath(env$volumes, input$directory_select), "\n")
+            cat("Upload folder specified: \n\t",parseDirPath(env$volumes, input$directory_select), "\n")
             if(file.exists(file.path(parseDirPath(env$volumes, input$directory_select),"report.tsv")))
             {   
-                cat("\tReport file located\n")
+                cat("Report file located\n")
                 if(file.exists(file.path(parseDirPath(env$volumes, input$directory_select),"report.stats.tsv")))
-                    cat("\tReport stats file located\n")
+                    cat("Report stats file located\n")
                 else 
                     cat("\tReprot stats file DOES NOT exist\n!! Please double check......")
                 #x<-read.csv(file.path(parseDirPath(volumes, input$directory_select),"report.tsv"),sep=",")
@@ -67,7 +71,7 @@ server <- function(input, output, session) {
     })
     
     #########################################
-    #                   Run Summary section 
+    #                   Run Summary section    NOT USING NOW
     #########################################
         #render for summary section using file. <----not using now.-->
         output$rep_sum <- renderTable({
@@ -97,6 +101,7 @@ server <- function(input, output, session) {
             striped=T
             #bordered=T
         )
+        
         output$rep_sum2 <- renderTable({
                 #cat("doing before checking.")
                 input$directory_select  #<- this is here so that the renderTable is observing its changes.
@@ -166,8 +171,137 @@ server <- function(input, output, session) {
                 }
             )#end of switch
             
-        },width=750, height=500);
+        },width=750, height=400);
+    
+    ################################
+    #                filtering tab
+    ################################
+    
+        output$Dataset_seq_table <- DT::renderDataTable({
+            
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            input$datasets_selected
+            input$data_filter_button
+            #check data availability
+            if(is.null(env$active_rep_data))
+                    return()
+            #check data selected
+            #    cat("data set radio:", input$datasets_selected,"\n")
+            if(length(input$datasets_selected)<1)
+                return()
+            #cat("length of selection,", length(input$ptms_selected),"\n")
+            
+            datatable(env$active_rep_data)
+            
+        });
         
+    #"Dataset_select"
+    # here we decide on the server side the available data set and the#
+    #show it as checkboxGroupInput
+    #  the datasets were maintained as a list structure.
+    #       datasets  list is structured as simple now, so that each one is
+    #               the child of previous one.  
+    output$Get_Dataset_select <- renderUI({
+            input$directory_select  #<- this is here so that the renderTable is observing its changes.
+            #input$Dataset_select
+            #cat("select changed ui\n")
+             input$data_filter_button
+            #read data first
+                if(is.null(env$all_rep_data))  #no data read in
+                    return()
+                    
+                dts.num<-length(env$list_all_data)
+                
+                dts<-paste0("dataSet",seq(1,dts.num,1))
+                #ptms<-lapply(mseq, FUN=extract_PTMs_each)
+                #ptms.unlist<-unlist(ptms)
+                #ptms.unlist<-ptms.unlist[ptms.unlist!=""]
+                #ptms.unlist<-unique(ptms.unlist)
+                #if(input$Data_select
+                radioButtons("datasets_selected", "Available data sets (Filtered):", choiceNames=dts,
+                choiceValues=seq(1,length(dts),1))
+        })
+        
+        output$Get_Field_available <- renderUI({
+            input$datasets_selected  #<- this is here so that the renderTable is observing its changes.
+            input$directory_select
+            #cat("select changed ui\n")
+            
+            #read data first
+                if(is.null(env$active_rep_data))  #no data read in
+                    return()
+                    
+                dts<-names(env$active_rep_data)
+                
+                #dts<-paste0("dataSet",seq(1,dts.num,1))
+                #ptms<-lapply(mseq, FUN=extract_PTMs_each)
+                #ptms.unlist<-unlist(ptms)
+                #ptms.unlist<-ptms.unlist[ptms.unlist!=""]
+                #ptms.unlist<-unique(ptms.unlist)
+                #if(input$Data_select
+                selectInput("fields_available", "Available data fields (to be filtered):", choices=dts)
+        })
+        
+        output$Get_Field_condition <- renderUI({
+            input$datasets_selected  #<- this is here so that the renderTable is observing its changes.
+            input$directory_select
+            input$fields_available
+            
+            #read data first
+                if(is.null(env$active_rep_data))  #no data read in
+                    return()
+                    
+                if(is.null(input$fields_available))
+                    return()
+                
+                dts<-class(env$active_rep_data[,input$fields_available])
+                if(dts=="numeric"){
+                      selectInput("field_condition",label="value conditions",choices=c("> (more than)",">= (not less than)", "= (equal to)","<= (not more than)","< (less than)"))
+                }
+                else{
+                    selectInput("field_condition",label="search criterion",choices=c("exact match", "partial match"))       
+                }
+                
+        })
+        
+        #observe for submit/generate data set 
+        observeEvent( input$data_filter_button, {
+            #get values of input fields 
+            field_condition<-input$field_condition
+            field<-input$fields_available
+            field_value<-input$value_input
+            reverse<-input$reverse_select
+            #and assume the active dataset is updated correctly
+            cat("field_condition:", field_condition, "; field:", field, "; filed value :", field_value,"; reverse :", reverse,"\n")
+            #filter the data 
+            type_field<-class(env$active_rep_data[,field])
+            dts<-env$active_rep_data
+            if(type_field=="numeric")
+            {
+                switch(field_condition,
+                    "> (more than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>field_value,]},
+                    ">= (not less than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>=field_value,]},
+                    "= (equal to)" ={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]==field_value,]},
+                    "<= (not more than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]<=field_value,]},
+                    "< (less than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]<field_value,]}
+                )#end of switch
+                
+            }
+            else #factor or char, treat as char 
+            {
+                if(field_condition=="exact match")
+                {
+                    env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]==field_value,]
+                }
+                else  #partial match
+                {
+                    env$active_rep_data=env$active_rep_data[grep(x=env$active_rep_data[,field], pattern=field_value, fixed=T),]
+                }
+            }
+            #update the list
+            env$list_all_data[[length(env$list_all_data)+1]]<-env$active_rep_data
+            env$dataset_conditions[[length(env$list_all_data)]]<- list(field, field_condition, field_value)
+        })#nd of observeEven for generate dataset.
     #-----------------------------------------
     #               PTM tab                       +
     ##########################\
