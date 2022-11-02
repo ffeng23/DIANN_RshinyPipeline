@@ -14,6 +14,8 @@ server <- function(input, output, session) {
         env$all_rep_data<-NULL; #this is the one that is read from disk without processing
         env$list_all_data<-list(); #this is the list keep track all the data
         env$dataset_conditions<-list(); #this is the list keep track of data set conditions.
+        env$index_active_data<-0; #intitially it is no index
+        
         env$volumes <- c(Home = fs::path_home(), "R Installation" = R.home(), getVolumes()())
         
         shinyDirChoose(input, "directory_select", roots = env$volumes, session = session, restrictions = system.file(package = "base"), allowDirCreate = FALSE)
@@ -31,6 +33,7 @@ server <- function(input, output, session) {
                 env$all_rep_data<-readDiannReport(env$filename)
                 env$list_all_data<-list(env$all_rep_data)
                 env$active_rep_data<-env$all_rep_data
+                env$index_active_data<-1
             }
         }
     )
@@ -219,7 +222,7 @@ server <- function(input, output, session) {
                 #ptms.unlist<-unique(ptms.unlist)
                 #if(input$Data_select
                 radioButtons("datasets_selected", "Available data sets (Filtered):", choiceNames=dts,
-                choiceValues=seq(1,length(dts),1))
+                        choiceValues=seq(1,length(dts),1))
         })
         
         output$Get_Field_available <- renderUI({
@@ -230,7 +233,7 @@ server <- function(input, output, session) {
             #read data first
                 if(is.null(env$active_rep_data))  #no data read in
                     return()
-                    
+                  #cat("select changed ui 222\n")   
                 dts<-names(env$active_rep_data)
                 
                 #dts<-paste0("dataSet",seq(1,dts.num,1))
@@ -278,9 +281,13 @@ server <- function(input, output, session) {
             dts<-env$active_rep_data
             if(type_field=="numeric")
             {
+                field_value<-as.numeric(field_value)
                 switch(field_condition,
-                    "> (more than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>field_value,]},
-                    ">= (not less than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>=field_value,]},
+                    "> (more than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>field_value,]
+                                                        #cat("class of field value :", class(field_value),"\n")
+                                                    },
+                    ">= (not less than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]>=field_value,]
+                                                      },
                     "= (equal to)" ={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]==field_value,]},
                     "<= (not more than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]<=field_value,]},
                     "< (less than)"={env$active_rep_data=env$active_rep_data[env$active_rep_data[,field]<field_value,]}
@@ -299,9 +306,31 @@ server <- function(input, output, session) {
                 }
             }
             #update the list
+            #here we add one new dataset to the next one after active_rep_data (indicated by env$index_active_data)
+            #get rid of all the original dataset after active_rep_data
+            #
+            if( env$index_active_data< length(env$list_all_data)){
+                env$list_all_data[c((env$index_active_data+1):length(env$list_all_data))]<-NULL
+            }
             env$list_all_data[[length(env$list_all_data)+1]]<-env$active_rep_data
             env$dataset_conditions[[length(env$list_all_data)]]<- list(field, field_condition, field_value)
+            
+            #update the radiobutton to the latest
+            updateRadioButtons(session, "datasets_selected", selected = length(env$list_all_data))
+            env$index_active_data<-length(env$list_all_data)
         })#nd of observeEven for generate dataset.
+        
+        #listen for the changes in datasets_selected 
+        observeEvent( input$datasets_selected, {
+            #get values of input fields 
+            if(is.null(input$datasets_selected))
+                return()
+            #cat("intital selected data:",input$datasets_selected, "\n") 
+            #cat("intital active data set:", length(env$list_all_data),"\n")
+            #cat("initial activ data set vale:", class(input$datasets_selected),"\n")
+            env$active_rep_data<-env$list_all_data[[as.integer(input$datasets_selected)]]
+            env$index_active_data<-as.integer(input$datasets_selected)
+        })
     #-----------------------------------------
     #               PTM tab                       +
     ##########################\
